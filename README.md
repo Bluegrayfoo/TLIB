@@ -9,11 +9,21 @@ if needed, and drops the command(s) into `~/cmds`.
 ```bash
 git clone https://github.com/BlueGrayFoo/TLIB.git
 cd TLIB
-chmod +x ZSH.zsh && ln -s "$(pwd)/ZSH.zsh" /usr/local/bin/tlib
+chmod +x ZSH.zsh tlibUpdater
+ln -s "$(pwd)/ZSH.zsh" /usr/local/bin/tlib
+ln -s "$(pwd)/tlibUpdater" /usr/local/bin/tlibUpdater
 ```
 
-Done — `tlib` works now. (`zsh`, `curl`, `tar`, `python3` are all it needs,
-and macOS already has them.)
+`tlib` and `tlibUpdater` both are installed with that command. (`zsh`,
+`curl`, `tar`, `python3` are all either needs, and macOS already has them.)
+
+```bash
+tlibUpdater update
+```
+
+pulls the latest `ZSH.zsh` from this repo and overwrites your installed
+`tlib` with it (backing up the old one first as `<path>.bak`), or says
+it's already up to date if nothing changed.
 
 <details>
 <summary>Only if `tlib doctor` warns about a missing compiler</summary>
