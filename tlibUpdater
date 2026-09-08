@@ -1,0 +1,199 @@
+#!/bin/zsh
+# Keeps an installed `tlib` current with BlueGrayFoo/TLIB.
+#
+# Install:
+#   chmod +x tlibUpdater && ln -s "$(pwd)/tlibUpdater" /usr/local/bin/tlibUpdater
+#
+# Run:
+#   tlibUpdater update
+set -u
+
+TLIB_UPDATE_URL="${TLIB_UPDATE_URL:-https://raw.githubusercontent.com/BlueGrayFoo/TLIB/main/ZSH.zsh}"
+
+usage() {
+  cat <<'USAGE'
+tlibUpdater - keep your installed tlib command up to date
+
+Usage:
+  tlibUpdater update
+USAGE
+}
+
+die() {
+  print -u2 -- "tlibUpdater: $*"
+  exit 1
+}
+
+# --- tlib's own progress UI, borrowed so this looks/feels the same ---
+
+use_color() {
+  [ "${TLIB_COLOR:-always}" != "never" ] || return 1
+  if [ "${TLIB_COLOR:-always}" = "always" ]; then return 0; fi
+  [ "${NO_COLOR:-}" = "" ] || return 1
+  [ -t 1 ]
+}
+
+colorize() {
+  local code="$1"
+  local text="$2"
+  if use_color; then
+    printf '\033[%sm%s\033[0m' "$code" "$text"
+  else
+    printf '%s' "$text"
+  fi
+}
+
+progress_diamond() { colorize "38;5;43" "◇"; }
+progress_pipe() { colorize "38;5;27" "│"; }
+progress_ok() { colorize "38;5;48" "✓"; }
+progress_fail() { colorize "38;5;196" "✗"; }
+progress_spin() { colorize "38;5;87" "$1"; }
+progress_label() { colorize "38;5;117" "$1"; }
+progress_done() { colorize "38;5;121" "$1"; }
+progress_final() { colorize "38;5;84" "$1"; }
+progress_error() { colorize "38;5;203" "$1"; }
+progress_connector() { colorize "38;5;27" "$1"; }
+
+first_error_line() {
+  local log="$1"
+  local line
+  if [ -s "$log" ]; then
+    line="$(sed -n '/[^[:space:]]/ { s/^[[:space:]]*//; p; q; }' "$log")"
+    [ -n "$line" ] && { print -- "$line"; return 0; }
+  fi
+  print -- "Unknown error."
+}
+
+print_error_tail() {
+  local log="$1"
+  local first=1
+  local line
+  [ -s "$log" ] || return 0
+  while IFS= read -r line; do
+    [ -n "${line//[[:space:]]/}" ] || continue
+    if [ "$first" -eq 1 ]; then
+      first=0
+      continue
+    fi
+    printf '   %s\n' "$line" >&2
+  done < "$log"
+}
+
+run_logged_command() {
+  local log="$1"
+  shift
+  "$@" >"$log" 2>&1
+}
+
+run_step() {
+  local label="$1"
+  local done="$2"
+  local fail="$3"
+  shift 3
+
+  local log="${TMPDIR:-/tmp}/tlibUpdater-command-$$-$RANDOM.log"
+  local -a frames
+  frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+  local i=1
+  local pid
+  local result_status=0
+
+  setopt localoptions nobgnice nomonitor
+
+  printf '%s\n' "$(progress_pipe)"
+  (
+    run_logged_command "$log" "$@"
+  ) &
+  pid=$!
+
+  while kill -0 "$pid" 2>/dev/null; do
+    printf '\r\033[2K%s    %s   %s...' "$(progress_diamond)" "$(progress_spin "${frames[$i]}")" "$(progress_label "$label")"
+    i=$((i + 1))
+    if [ "$i" -gt "${#frames[@]}" ]; then i=1; fi
+    sleep 0.08
+  done
+
+  wait "$pid"
+  result_status=$?
+  printf '\r\033[2K'
+
+  if [ "$result_status" -eq 0 ]; then
+    printf '%s    %s   %s\n' "$(progress_diamond)" "$(progress_ok)" "$(progress_done "$done")"
+  else
+    local detail="$(first_error_line "$log")"
+    printf '%s    %s   %s\n' "$(progress_connector '├─')" "$(progress_fail)" "$(progress_error "$fail")" >&2
+    printf '%s\n' "$(progress_pipe)" >&2
+    printf '%s    %s  %s\n' "$(progress_connector '└─')" "$(progress_error "Error:")" "$(progress_error "$detail")" >&2
+    print_error_tail "$log"
+  fi
+
+  rm -f "$log"
+  return "$result_status"
+}
+
+finish_progress() {
+  local message="${1:-Done.}"
+  printf '%s\n' "$(progress_pipe)"
+  printf '%s    %s\n' "$(progress_connector '└─')" "$(progress_final "$message")"
+}
+
+# --- update logic ---
+
+# Find the real file behind the `tlib` command on PATH, following a
+# symlink if it is one (tlib's own setup instructions install it as a
+# symlink, but a plain copied file works too).
+resolve_tlib_path() {
+  local tlib_path
+  tlib_path="$(command -v tlib)" || die "tlib is not on PATH, nothing to update"
+
+  if [ -L "$tlib_path" ]; then
+    local target
+    target="$(readlink "$tlib_path")"
+    case "$target" in
+      /*) print -- "$target" ;;
+      *) print -- "$(cd "$(dirname "$tlib_path")" && pwd)/$target" ;;
+    esac
+  else
+    print -- "$tlib_path"
+  fi
+}
+
+download_latest() {
+  local tmp="$1"
+  curl -fsSL "$TLIB_UPDATE_URL" -o "$tmp" || { print -u2 -- "failed to download from $TLIB_UPDATE_URL"; return 1; }
+  [ -s "$tmp" ] || { print -u2 -- "downloaded file is empty"; return 1; }
+  head -1 "$tmp" | grep -q '^#!' || { print -u2 -- "downloaded file doesn't look like a script"; return 1; }
+}
+
+apply_update() {
+  local tmp="$1" real_path="$2"
+  cp "$real_path" "$real_path.bak" || { print -u2 -- "failed to back up $real_path"; return 1; }
+  cp "$tmp" "$real_path" || { print -u2 -- "failed to write $real_path"; return 1; }
+  chmod +x "$real_path"
+}
+
+cmd_update() {
+  local real_path
+  real_path="$(resolve_tlib_path)" || exit 1
+  [ -w "$real_path" ] || die "no write permission for $real_path"
+
+  local tmp
+  tmp="$(mktemp)"
+  trap 'rm -f "${tmp:-}"' EXIT
+
+  run_step "Checking for updates" "Checked for updates" "Update check failed" download_latest "$tmp" || exit 1
+
+  if cmp -s "$tmp" "$real_path"; then
+    finish_progress "Already up to date ($real_path)."
+    return 0
+  fi
+
+  run_step "Installing update" "Installed update" "Install failed" apply_update "$tmp" "$real_path" || exit 1
+  finish_progress "Done. Updated $real_path (previous version saved to $real_path.bak)."
+}
+
+case "${1:-}" in
+  update) cmd_update ;;
+  help|-h|--help|"") usage ;;
+  *) die "unknown command: $1" ;;
+esac
