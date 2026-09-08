@@ -13,36 +13,69 @@ the error messages are clearer.
 
 ---
 
-## 0. Quick start: publishing a repo, start to finish
+## 0. A complete, real, working example — no placeholders
 
-1. **Write your command.** Any single script or prebuilt executable —
-   shell, Python, Node, a compiled binary, whatever.
-2. **Add an `info.xml` at the repo root** (see section 2) describing it.
-3. **Test locally, before pushing anything:**
-   ```bash
-   tlib local /path/to/your/repo
-   ```
-   This runs the real install logic against your working directory —
-   no download, no need to push first. Fix everything it flags.
-4. **Uninstall your test install** so you're testing cleanly next time:
-   ```bash
-   tlib uninstall local/<your-repo-dirname>
-   ```
-5. **Push to GitHub, on the branch you expect people to install from**
-   (usually `main` — see section 1 on why the branch name matters).
-6. **Test the real thing**, exactly the way a stranger would:
-   ```bash
-   tlib install YourGitHubUsername/your-repo
-   tlib uninstall YourGitHubUsername/your-repo
-   ```
-   Do this from a directory that isn't your repo clone, so you're not
-   accidentally relying on files only present in your working copy.
-7. **Tell people how to install it.** Copy the pattern from this repo's
-   own README: a `tlib install Owner/Repo` line, and what command(s) it
-   gives them.
+This exact example is checked into this repo at
+[`examples/greet/`](examples/greet/) — two files, both shown here in
+full, both real. You can run every command below yourself right now.
 
-If step 3 or step 6 fails, section 7 below decodes the exact error
-message you're looking at.
+`examples/greet/greet.sh` (the entire file):
+
+```sh
+#!/bin/sh
+echo "Hello from tlib!"
+```
+
+`examples/greet/info.xml` (the entire file):
+
+```xml
+<tlib version="1">
+  <package name="greet" version="1.0.0">
+    <commands>
+      <command name="greet" language="shell" source="greet.sh"/>
+    </commands>
+  </package>
+</tlib>
+```
+
+That's the whole repo. Install it, run it, remove it — this is the real
+output from actually doing that, on this exact directory, just now:
+
+```
+$ tlib local /Users/you/TLIB/examples/greet
+│
+◇    ✓   Opened local module
+│
+◇    ✓   Installed info.xml commands
+│
+└─    Done. Installed successfully.
+
+$ greet
+Hello from tlib!
+
+$ tlib uninstall local/greet
+│
+◇    ✓   Found install record
+│
+◇    ✓   Removed greet
+│
+└─    Done. Uninstalled local/greet.
+
+$ greet
+zsh: command not found: greet
+```
+
+Once you've confirmed something like this works for your own tool, the
+only thing that changes for a real repo is skipping `tlib local` in
+favor of pushing to GitHub and running `tlib install YourUsername/repo`
+instead — same install logic either way (see section 4).
+
+Every other example past this point in this doc follows the same shape
+as `greet` but swaps in a different language/build pattern — they're
+templates to adapt, not something to run as-is (they use stand-in names
+like `my-tool` on purpose, since they're patterns, not a specific repo).
+If a template is confusing, come back to this section — `greet` is the
+one thing here guaranteed to work exactly as written.
 
 ---
 
