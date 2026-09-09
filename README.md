@@ -7,11 +7,19 @@ if needed, and drops the command(s) into `~/cmds`.
 ## Setup
 
 ```bash
+#!/usr/bin/env bash
+
+if [ ! -d "$HOME/cmds" ]; then
+    mkdir -p "$HOME/cmds"
+    printf '\nexport PATH="$HOME/cmds:$PATH"\n' >> "$HOME/.zshrc"
+fi
+
 git clone https://github.com/BlueGrayFoo/TLIB.git
-cd TLIB
+cd TLIB || exit 1
+
 chmod +x ZSH.zsh tlibUpdater
-ln -s "$(pwd)/ZSH.zsh" /usr/local/bin/tlib
-ln -s "$(pwd)/tlibUpdater" /usr/local/bin/tlibUpdater
+ln -s "$(pwd)/ZSH.zsh" "$HOME/cmds/tlib"
+ln -s "$(pwd)/tlibUpdater" "$HOME/cmds/tlibUpdater"
 ```
 
 `tlib` and `tlibUpdater` both are installed with that command. (`zsh`,
