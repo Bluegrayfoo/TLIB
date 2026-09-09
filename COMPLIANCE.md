@@ -7,10 +7,10 @@ work; if it doesn't, this doc tells you exactly which check fails and why.
 
 Every example in this document is a **real, currently-published repo**
 you can install and inspect yourself right now — `knittingCat/stock-checker`,
-`knittingCat/SD-Photo-Viewer`, `Bluegrayfoo/ascii-stl-viewer`, and this
-repo's own `examples/greet/` — not invented placeholder names. The only
-exceptions are examples of what *fails*, which have to be made up, since
-no real published repo is broken on purpose (those are clearly labeled).
+`knittingCat/SD-Photo-Viewer`, and `Bluegrayfoo/ascii-stl-viewer` — not
+invented placeholder names. The only exceptions are examples of what
+*fails*, which have to be made up, since no real published repo is
+broken on purpose (those are clearly labeled).
 
 There are two repo shapes `tlib` understands. Use `info.xml` unless you
 have a specific reason to use the legacy shape — it's more capable and
@@ -20,64 +20,97 @@ the error messages are clearer.
 
 ## 0. A complete, real, working example
 
-This exact example is checked into this repo at
-[`examples/greet/`](examples/greet/) — two files, both shown here in
-full. You can run every command below yourself right now.
-
-`examples/greet/greet.sh` (the entire file):
+`knittingCat/stock-checker`'s `bin/stock-checker` (the entire file):
 
 ```sh
-#!/bin/sh
-echo "Hello from tlib!"
+#!/usr/bin/env bash
+set -e
+REPO_DIR="$HOME/.tlib/repos/knittingCat/stock-checker"
+TARGET=$(find "$REPO_DIR" -maxdepth 2 -name stock_checker.py 2>/dev/null | head -1)
+if [ -z "$TARGET" ]; then
+  echo "stock-checker: could not find stock_checker.py under $REPO_DIR" >&2
+  exit 1
+fi
+exec python3 "$TARGET" "$@"
 ```
 
-`examples/greet/info.xml` (the entire file):
+<details>
+<summary>What is this file, in plain terms?</summary>
+
+It's a "shell script" — a text file containing terminal commands, that
+you can run as if it were its own program. `#!/usr/bin/env bash` tells
+the computer to run the rest of the file using `bash`. The rest finds
+the real Python script inside `tlib`'s download cache and runs it with
+`python3`, passing along any arguments (`"$@"`) — so `stock-checker
+--test` really just becomes `python3 stock_checker.py --test` under the
+hood. This wrapper approach (rather than pointing `info.xml` at
+`stock_checker.py` directly) exists for a real reason — see the
+compliance tip on interpreter shims in section 2.3.
+
+</details>
+
+The relevant line in its `info.xml`:
 
 ```xml
-<tlib version="1">
-  <package name="greet" version="1.0.0">
-    <commands>
-      <command name="greet" language="shell" source="greet.sh"/>
-    </commands>
-  </package>
-</tlib>
+<command name="stock-checker" output="bin/stock-checker"/>
 ```
 
-That's the whole repo. This is the real output from actually installing
-it, running it, and removing it, on this exact directory, just now:
+<details>
+<summary>What is this line, in plain terms?</summary>
 
-```
-$ tlib local /Users/you/TLIB/examples/greet
-│
-◇    ✓   Opened local module
-│
-◇    ✓   Installed info.xml commands
-│
-└─    Done. Installed successfully.
+XML is a format for structuring text with matching open/close tags —
+everything between an opening `<tag ...>` and closing `</tag>` "belongs
+to" that tag, and tags can carry `name="value"` pairs right inside their
+opening angle brackets, called "attributes." This particular tag,
+`<command>`, has two attributes: `name` (what to call the installed
+command) and `output` (where to find the already-built file for it —
+see section 2.3). The trailing `/>` instead of a separate closing tag is
+just shorthand for "this tag has no nested content inside it." `info.xml`
+is this format used to describe, to `tlib`, what command(s) a repo
+provides and how to build/run them — it's not a program itself, just a
+structured description that `tlib` reads.
 
-$ greet
-Hello from tlib!
+</details>
 
-$ tlib uninstall local/greet
-│
-◇    ✓   Found install record
-│
-◇    ✓   Removed greet
-│
-└─    Done. Uninstalled local/greet.
+This is the real output from actually installing it, running it, and
+removing it — section 4 walks through this exact transcript, against
+this exact repo, in full.
 
-$ greet
-zsh: command not found: greet
-```
+<details>
+<summary>What does "installing" actually mean here?</summary>
 
-The only thing that changes for a real GitHub repo is skipping
-`tlib local` in favor of pushing and running `tlib install
-YourUsername/repo` — same install logic either way (section 4 does this
-for real, against `knittingCat/stock-checker`).
+`tlib` copies `bin/stock-checker` to a folder on your computer
+(`~/cmds`, by default) that your terminal already knows to look in
+whenever you type a command name — that "knows to look in" list is
+called your `PATH`. Typing `stock-checker` afterward works because
+`~/cmds/stock-checker` now exists and `~/cmds` is on your `PATH`;
+uninstalling removes that file, so there's nothing left to run.
+
+</details>
 
 ---
 
 ## 1. Baseline requirements (both shapes)
+
+<details>
+<summary>What's a "repo", "public"/"private", and a "branch"?</summary>
+
+A "repo" (repository) is just a project's folder of files as stored on
+GitHub, with its full history of changes. "Public" means anyone on the
+internet can view and download it; "private" means only people you've
+specifically given access to can. A "branch" is a named, separate line
+of work within the same repo — most repos have one main branch (usually
+called `main`, sometimes `master`) that represents the current, official
+version of the project.
+
+`tlib install Owner/Repo` downloads a `.zip`-like archive of a repo
+straight from GitHub's servers, the same way you'd download any file
+from a website — it does this with `curl`, a command-line tool for
+fetching things over the internet (think of it as a text-only version
+of typing a URL into a browser and hitting download). Because this
+download has no login step, it only works for public repos.
+
+</details>
 
 - [ ] **The repo is public.** `tlib install knittingCat/stock-checker`
       downloads
@@ -89,6 +122,19 @@ for real, against `knittingCat/stock-checker`).
       GitHub repo or branch not found: knittingCat/stock-checker on branch 'main'.
       Check the spelling, make sure the repo is public, and make sure the branch is named 'main'.
       ```
+      <details>
+      <summary>What's "HTTP 404"?</summary>
+
+      It's the standard error code the web uses for "nothing exists at
+      this address" — the exact same error you'd get visiting a broken
+      link in a browser. GitHub's servers send this back whenever the
+      download URL points at a repo that either doesn't exist, is
+      private, or is spelled wrong (from the outside, GitHub deliberately
+      makes "private" and "doesn't exist" look identical, so strangers
+      can't even tell a private repo exists).
+
+      </details>
+
       **Fix:** make the repo public in its GitHub settings, or double-check
       the spelling of the owner/repo name.
 
@@ -108,8 +154,14 @@ for real, against `knittingCat/stock-checker`).
       ```
 
 - [ ] **`info.xml` (or `make.sh` + `src/`) lives at the repo root** — not
-      in a subdirectory. This is the real, complete layout of
-      `knittingCat/stock-checker`:
+      in a subdirectory. ("Root" just means the top-level folder of the
+      repo itself — not inside any folder within it. A "subdirectory" is
+      any folder nested inside that.) This is the real, complete layout
+      of `knittingCat/stock-checker` — this tree-style listing is just a
+      compact way of drawing a folder and the files/folders inside it,
+      the same information the `ls` command or any graphical file
+      browser (Finder on a Mac, File Explorer on Windows, etc.) would
+      show you:
       ```
       stock-checker/
       ├── info.xml              ← tlib looks exactly here
@@ -241,7 +293,7 @@ Each command needs:
   instead:
   ```xml
   <command source="hello.sh" language="shell"/>
-  <!-- name becomes "hello" automatically, exactly like examples/greet -->
+  <!-- name becomes "hello" automatically -->
   ```
   The name must match `^[A-Za-z0-9._+-]+$` — no slashes, no spaces. These
   would both fail, unlike the real `sd-photo-viewer-stop`:
@@ -289,6 +341,24 @@ a hand-written wrapper script, used as-is:
 ```
 
 - The path must exist in the repo and must stay **inside** the repo.
+
+  <details>
+  <summary>What does "stay inside the repo" mean?</summary>
+
+  `bin/stock-checker` is a "relative path" — it means "starting from
+  wherever we currently are, go into the `bin` folder and find
+  `stock-checker`." `../outside-the-repo/stock-checker` is also
+  relative, but `../` means "go up one level, out of the current
+  folder" — so this path tries to escape the repo's own folder and reach
+  somewhere else on the computer entirely. `tlib` blocks that on
+  purpose: without this rule, a repo's `info.xml` could reference (and
+  install) some unrelated file already sitting elsewhere on your
+  machine, which would be a way to trick `tlib` into doing something
+  its author didn't intend. This is why the rule exists, not just what
+  it says.
+
+  </details>
+
   This fails — it points outside the repo:
   ```xml
   <command name="stock-checker" output="../outside-the-repo/stock-checker"/>
@@ -347,6 +417,22 @@ in section 6 about not assuming your dev machine's tools are present.)
 <command name="sd-photo-viewer-stop" language="shell" source="bin/sd-photo-viewer-stop"/>
 ```
 
+<details>
+<summary>What's the difference between "compiling" and an "interpreter"?</summary>
+
+Some programming languages (C, Go, Rust, Swift...) need to be translated
+into a form the computer's processor can run directly, before they can
+run at all — that translation step is called "compiling," and the
+program that does it (`clang`, `go`, `rustc`, `swiftc`) is a "compiler."
+Other languages (Python, Node/JavaScript, Ruby...) skip that step: a
+separate program called an "interpreter" (`python3`, `node`, `ruby`)
+reads the source file and runs it line by line, on the spot, every time.
+That's why compiled languages need a compiler installed only once, at
+install time, while interpreted languages need their interpreter
+present every time the command actually runs.
+
+</details>
+
 Full dispatch table:
 
 | `language` value(s) | What happens | Needs on the installer's machine |
@@ -404,6 +490,52 @@ their main scripts — both scripts do relative-path file I/O based on
 `Path(__file__).parent` (`stock_checker.py`'s `CONFIG_PATH`), and a
 hand-written `bin/` wrapper script that `find`s the real script's path at
 runtime is more robust than assuming where the interpreter shim lands it.
+
+### What happens to each `<command>`'s result
+
+Whichever of `output`/`source`/`build` resolves to a file, that exact
+file gets copied into the installer's install directory (`~/cmds` by
+default) under the command's `name=`, and made executable (`chmod +x`).
+That's what actually lands on `PATH` — installing
+`knittingCat/stock-checker` copies its real `bin/stock-checker` to
+`~/cmds/stock-checker`, which is why typing `stock-checker` in a
+terminal runs it afterward.
+
+**`<command>` elements are processed one at a time, in the order they
+appear**, and each one is copied to `~/cmds` immediately as it finishes —
+`tlib` doesn't wait for the whole file to succeed before copying
+anything. `stock-checker`'s real `info.xml` has four, in this order:
+`stock-checker`, `stock-checker-setup`, `stock-checker-install`,
+`stock-checker-uninstall` — each gets built/located and copied in turn.
+
+Only after *every* command in the file has been copied does `tlib` write
+a manifest to `~/.tlib/installed/<owner>__<repo>`, listing all the
+command names it installed. For the real install in section 4, that
+manifest records all four `stock-checker` names. `tlib uninstall` reads
+this file back later to know what to delete — nothing else tracks it.
+
+**This creates one real edge case worth knowing about, for both authors
+and installers.** Imagine `stock-checker`'s `info.xml` had a fifth
+command appended after the real four, and that fifth one's `build=`
+fails (missing tool, bad build script, whatever). The first four would
+already be copied into `~/cmds`
+*before* the fifth one's failure aborts the install. Since the manifest
+is only written at the very end, it never gets created — so those four
+files sit in `~/cmds`, fully installed and working, but `tlib` has no
+record that they belong to this repo. `tlib uninstall
+knittingCat/stock-checker` would then fail with:
+```
+tlib: knittingCat/stock-checker is not installed by tlib
+```
+(no manifest to read), and removing those
+stray files means deleting them from `~/cmds` by hand.
+
+- **As an author:** order your `<command>` elements from most-likely-to-work
+  to least, and test the *whole* file with `tlib local` (section 4) before
+  publishing — a clean pass proves this can't happen to your installers.
+- **As an installer:** if `tlib install` fails partway through a repo with
+  several commands, check `~/cmds` for anything that repo might have
+  already dropped there before concluding nothing happened.
 
 ### 2.4 Field name aliases
 
@@ -537,20 +669,7 @@ compiler toolchains you personally have, so you know which of your
 
 ## 5. Worked examples
 
-Three real, currently-published repos, shown in full.
-
-**`examples/greet/info.xml` — a single shell script (see section 0 for
-the complete walkthrough):**
-
-```xml
-<tlib version="1">
-  <package name="greet" version="1.0.0">
-    <commands>
-      <command name="greet" language="shell" source="greet.sh"/>
-    </commands>
-  </package>
-</tlib>
-```
+Real, currently-published repos, shown in full.
 
 **`Bluegrayfoo/ascii-stl-viewer`'s `info.xml` — a single shell script,
 nested in a subdirectory:**
@@ -621,6 +740,23 @@ real commands (see section 4 for the real transcript).
 ---
 
 ## 6. A note on trust, for repo authors and installers
+
+<details>
+<summary>What does "no sandboxing" mean?</summary>
+
+A "sandbox" is a restricted environment that limits what a program is
+allowed to do — stopping it from reading your files, reaching the
+internet, or changing things outside a small designated area, even if
+the program tries to. "No sandboxing" means none of that applies here:
+a command's `build=` step or script runs with exactly the same access
+to your computer as anything you'd type into your own terminal
+yourself — it can read your files, install things, connect to the
+internet, anything a normal program on your computer can do. That's not a
+bug in `tlib` — no package manager (Homebrew, npm, pip, etc.) sandboxes
+this either — it's just worth knowing plainly, since `tlib install`
+doesn't pause to warn you about it first.
+
+</details>
 
 `build=` and every `source=` compile/interpret step run with the
 installing user's full permissions, on their machine, with no sandboxing

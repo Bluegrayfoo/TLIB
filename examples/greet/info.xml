@@ -1,7 +1,0 @@
-<tlib version="1">
-  <package name="greet" version="1.0.0">
-    <commands>
-      <command name="greet" language="shell" source="greet.sh"/>
-    </commands>
-  </package>
-</tlib>
