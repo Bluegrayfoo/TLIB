@@ -7,8 +7,6 @@ if needed, and drops the command(s) into `~/cmds`.
 ## Setup
 
 ```bash
-#!/usr/bin/env bash
-
 if [ ! -d "$HOME/cmds" ]; then
     mkdir -p "$HOME/cmds"
     printf '\nexport PATH="$HOME/cmds:$PATH"\n' >> "$HOME/.zshrc"
