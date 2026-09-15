@@ -12,12 +12,13 @@ if [ ! -d "$HOME/cmds" ]; then
     printf '\nexport PATH="$HOME/cmds:$PATH"\n' >> "$HOME/.zshrc"
 fi
 
-if [ -d TLIB ]; then
-    (cd TLIB && git pull)
+TLIB_SRC="$HOME/.tlib-src"
+if [ -d "$TLIB_SRC" ]; then
+    (cd "$TLIB_SRC" && git pull)
 else
-    git clone https://github.com/BlueGrayFoo/TLIB.git
+    git clone https://github.com/BlueGrayFoo/TLIB.git "$TLIB_SRC"
 fi
-cd TLIB || exit 1
+cd "$TLIB_SRC" || exit 1
 
 chmod +x ZSH.zsh tlibUpdater
 ln -sf "$(pwd)/ZSH.zsh" "$HOME/cmds/tlib"
