@@ -12,12 +12,17 @@ if [ ! -d "$HOME/cmds" ]; then
     printf '\nexport PATH="$HOME/cmds:$PATH"\n' >> "$HOME/.zshrc"
 fi
 
-git clone https://github.com/BlueGrayFoo/TLIB.git
-cd TLIB || exit 1
+TLIB_SRC="$HOME/.tlib-src"
+if [ -d "$TLIB_SRC" ]; then
+    (cd "$TLIB_SRC" && git pull)
+else
+    git clone https://github.com/BlueGrayFoo/TLIB.git "$TLIB_SRC"
+fi
+cd "$TLIB_SRC" || exit 1
 
 chmod +x ZSH.zsh tlibUpdater
-ln -s "$(pwd)/ZSH.zsh" "$HOME/cmds/tlib"
-ln -s "$(pwd)/tlibUpdater" "$HOME/cmds/tlibUpdater"
+ln -sf "$(pwd)/ZSH.zsh" "$HOME/cmds/tlib"
+ln -sf "$(pwd)/tlibUpdater" "$HOME/cmds/tlibUpdater"
 ```
 
 `tlib` and `tlibUpdater` both are installed with that command. (`zsh`,
