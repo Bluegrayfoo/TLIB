@@ -363,6 +363,7 @@ install_info_xml() {
       python3 - "$repo_dir" "$INSTALL_DIR" "$MANIFEST_DIR" "$module_key"
   } <<'PY' || return 1
 import os
+import platform
 import shlex
 import shutil
 import stat
@@ -463,6 +464,37 @@ def run(command, cwd=repo):
 def need(tool: str, why: str) -> None:
     if shutil.which(tool) is None:
         fail(f"{tool} is required for {why}")
+
+PLATFORM_ALIASES = {
+    "macos": "darwin",
+    "mac": "darwin",
+    "osx": "darwin",
+    "darwin": "darwin",
+    "linux": "linux",
+    "windows": "windows",
+    "win": "windows",
+    "win32": "windows",
+}
+
+def normalize_platform(name: str) -> str:
+    return PLATFORM_ALIASES.get(name.strip().lower(), name.strip().lower())
+
+def check_platforms(root) -> None:
+    wanted_raw = []
+    for elem in root.iter():
+        if tag(elem) in {"platform", "os"}:
+            name = value(elem, "name", "os", "platform") or (elem.text or "").strip()
+            if name:
+                wanted_raw.append(name)
+    if not wanted_raw:
+        return
+    current = normalize_platform(platform.system())
+    wanted = {normalize_platform(name) for name in wanted_raw}
+    if current not in wanted:
+        fail(
+            f"this package only supports {', '.join(sorted(wanted))}, "
+            f"but this machine is {current}"
+        )
 
 def shell_words(text: str):
     return shlex.split(text) if text else []
@@ -588,6 +620,8 @@ except ET.ParseError as exc:
     fail(f"invalid XML in info.xml: line {exc.position[0]}, column {exc.position[1]}: {exc.msg}")
 except OSError as exc:
     fail(f"cannot read info.xml: {exc}")
+
+check_platforms(root)
 
 requires = []
 for elem in root.iter():
@@ -716,6 +750,7 @@ doctor() {
   print -- "TLib doctor"
   print -- "install dir: $INSTALL_DIR"
   print -- "cache dir: $CACHE_DIR"
+  print -- "platform: $(uname -s)"
   if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then print -- "✓ ~/cmds is writable"; else print -- "✗ ~/cmds is not writable or does not exist"; ok=0; fi
   for tool in curl tar zsh python3; do
     if have "$tool"; then print -- "✓ $tool found"; else print -- "✗ $tool missing"; ok=0; fi

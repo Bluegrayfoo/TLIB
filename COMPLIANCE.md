@@ -191,9 +191,21 @@ from another published repo, `Bluegrayfoo/ascii-stl-viewer`'s
 </platforms>
 ```
 
-— is **silently ignored**. `tlib` has no OS-gating logic, so this doesn't
-stop someone on a different platform from attempting the install (it
-would just fail later on whatever's actually platform-specific).
+— is **enforced**: `tlib` compares it against the installing machine's OS
+(`platform.system()`, normalized — `macos`/`mac`/`osx`/`darwin` all mean
+the same thing, likewise `windows`/`win`/`win32`) before anything else in
+the file is processed, including `<requires>`. On a mismatch the install
+aborts immediately:
+
+```
+tlib info.xml: this package only supports darwin, but this machine is linux
+```
+
+Accepts `<platform>` or `<os>` as the tag name, either as
+`<platform name="macos"/>` or bare text `<platform>macos</platform>`, and
+(like `<requires>`) they work anywhere in the file, not just inside a
+`<platforms>` wrapper. No `<platforms>`/`<platform>` entries at all means
+no OS restriction — the package is assumed to run anywhere.
 
 ### 2.1 `<requires>`
 
@@ -572,7 +584,7 @@ nested in a subdirectory:**
 </tlib>
 ```
 
-(The `<platforms>` block is the ignored one from section 2 — it's here
+(The `<platforms>` block is the enforced one from section 2 — it's here
 because this is the real file, unedited.)
 
 **`knittingCat/stock-checker`'s `info.xml` — four commands, all
@@ -660,6 +672,7 @@ write):
 |---|---|---|
 | `GitHub repo or branch not found` | Repo is private, misspelled, or on a different default branch than `main` | Make it public; double check spelling; tell installers to use a branch-qualified URL if not `main` |
 | `<tool> is required for info.xml requirement` | Something in `<requires>` isn't on the installer's `PATH` | That's expected/by design — just make sure you're not requiring tools you don't actually need |
+| `this package only supports <os>, but this machine is <os>` | A `<platforms>`/`<platform>` entry doesn't include the installer's OS | Expected/by design if the package really is OS-specific; otherwise add the missing `<platform name="..."/>` or drop the block entirely |
 | `command '<name>' needs source, build, or output` | A `<command>` has none of the three | Add one — see the 2.2 example |
 | `duplicate command names: <name>` | Two `<command>` elements share a name | Rename one — see the 2.2 example |
 | `command #N has invalid or missing name` | Name has illegal characters, or couldn't be derived from `source` | Use only `A-Za-z0-9._+-`, or set `name=` explicitly |
