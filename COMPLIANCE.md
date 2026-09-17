@@ -242,6 +242,31 @@ no OS restriction — the package is assumed to run anywhere.
   only `python3` and not, say, `node`, even though other repos in this
   same GitHub account need it. Every install of your repo pays the cost
   of every tool you list.
+- **Xcode Command Line Tools** are a special case, because a plain
+  `command -v clang` isn't reliable proof they're installed — a fresh
+  macOS install can have a placeholder `clang` on `PATH` that only starts
+  working once the Command Line Tools package itself is installed. Two
+  ways to require them:
+  - Automatically: any `<requires>` entry for `clang`, `clang++`, or
+    `swiftc` — and any `c`/`cpp`/`objc`/`swift` `<command>`, even without
+    a `<requires>` entry — checks `xcode-select -p` on macOS in addition
+    to `PATH`, and fails with a dedicated message
+    (`clang was found but Xcode Command Line Tools are not installed,
+    required for info.xml requirement (run: xcode-select --install)`)
+    if the tools aren't actually installed.
+  - Explicitly, if your repo needs the Command Line Tools for something
+    other than compiling (e.g. shelling out to `git` or `make` on a
+    fresh Mac): list them directly, using `xcode-select`, `xcode-clt`,
+    `xcode-command-line-tools`, `command-line-tools`, `xcode-cli-tools`,
+    or `clt` as the tool name — all equivalent:
+    ```xml
+    <requires>
+      <tool name="xcode-select"/>
+    </requires>
+    ```
+    On a non-macOS machine this always fails (Command Line Tools are a
+    macOS-only concept), with a message that says so rather than the
+    generic "not on PATH" one.
 
 ### 2.2 `<command>` — required fields
 
@@ -673,6 +698,8 @@ write):
 | `GitHub repo or branch not found` | Repo is private, misspelled, or on a different default branch than `main` | Make it public; double check spelling; tell installers to use a branch-qualified URL if not `main` |
 | `<tool> is required for info.xml requirement` | Something in `<requires>` isn't on the installer's `PATH` | That's expected/by design — just make sure you're not requiring tools you don't actually need |
 | `this package only supports <os>, but this machine is <os>` | A `<platforms>`/`<platform>` entry doesn't include the installer's OS | Expected/by design if the package really is OS-specific; otherwise add the missing `<platform name="..."/>` or drop the block entirely |
+| `<tool> was found but Xcode Command Line Tools are not installed` | `clang`/`clang++`/`swiftc` is on `PATH` (macOS ships a placeholder binary) but the Command Line Tools package hasn't actually been installed | Run `xcode-select --install` on the installing machine |
+| `Xcode Command Line Tools are required for ..., but this machine is not macOS` | Your `<requires>` lists `xcode-select`/`xcode-clt`/etc. and the installer isn't on macOS | Expected/by design — the package is macOS-only; pair it with `<platforms><platform name="macos"/></platforms>` for a clearer up-front message |
 | `command '<name>' needs source, build, or output` | A `<command>` has none of the three | Add one — see the 2.2 example |
 | `duplicate command names: <name>` | Two `<command>` elements share a name | Rename one — see the 2.2 example |
 | `command #N has invalid or missing name` | Name has illegal characters, or couldn't be derived from `source` | Use only `A-Za-z0-9._+-`, or set `name=` explicitly |

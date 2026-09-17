@@ -155,6 +155,16 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+xcode_clt_installed() {
+  have xcode-select && xcode-select -p >/dev/null 2>&1
+}
+
+require_xcode_clt() {
+  local why="$1"
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  xcode_clt_installed || die "Xcode Command Line Tools are required for $why (run: xcode-select --install)"
+}
+
 repo_parts_from_spec() {
   local spec="$1"
   local cleaned="$spec"
@@ -244,14 +254,17 @@ compile_one_source() {
   case "$ext" in
     c)
       have clang || die "clang is required to compile C files"
+      require_xcode_clt "C files"
       clang "$source" -o "$out"
       ;;
     cc|cpp|cxx)
       have clang++ || die "clang++ is required to compile C++ files"
+      require_xcode_clt "C++ files"
       clang++ "$source" -o "$out"
       ;;
     m)
       have clang || die "clang is required to compile Objective-C files"
+      require_xcode_clt "Objective-C files"
       if grep -q "AppKit\|Cocoa" "$source"; then
         clang -fobjc-arc -framework AppKit "$source" -o "$out"
       else
@@ -260,6 +273,7 @@ compile_one_source() {
       ;;
     swift)
       have swiftc || die "swiftc is required to compile Swift files"
+      require_xcode_clt "Swift files"
       swiftc "$source" -o "$out"
       ;;
     sh|zsh|bash)
@@ -461,9 +475,42 @@ def run(command, cwd=repo):
     except subprocess.CalledProcessError as exc:
         fail(f"command failed with exit {exc.returncode}: {' '.join(map(str, command))}")
 
+XCODE_CLT_TOOLS = {"clang", "clang++", "swiftc"}
+XCODE_CLT_ALIASES = {
+    "xcode-clt",
+    "xcode-command-line-tools",
+    "command-line-tools",
+    "xcode-cli-tools",
+    "xcode-select",
+    "clt",
+}
+
+def has_xcode_clt() -> bool:
+    if platform.system() != "Darwin":
+        return False
+    if shutil.which("xcode-select") is None:
+        return False
+    result = subprocess.run(
+        ["xcode-select", "-p"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    return result.returncode == 0
+
+def need_xcode_clt(why: str) -> None:
+    if platform.system() != "Darwin":
+        fail(f"Xcode Command Line Tools are required for {why}, but this machine is not macOS")
+    if not has_xcode_clt():
+        fail(f"Xcode Command Line Tools are required for {why} (run: xcode-select --install)")
+
 def need(tool: str, why: str) -> None:
     if shutil.which(tool) is None:
         fail(f"{tool} is required for {why}")
+    # A placeholder clang/clang++/swiftc can exist on PATH on a fresh macOS
+    # install before the Command Line Tools package itself is installed.
+    if tool in XCODE_CLT_TOOLS and platform.system() == "Darwin" and not has_xcode_clt():
+        fail(
+            f"{tool} was found but Xcode Command Line Tools are not installed, "
+            f"required for {why} (run: xcode-select --install)"
+        )
 
 PLATFORM_ALIASES = {
     "macos": "darwin",
@@ -630,7 +677,10 @@ for elem in root.iter():
         if tool:
             requires.append(tool)
 for tool in requires:
-    need(tool, f"info.xml requirement")
+    if tool.strip().lower() in XCODE_CLT_ALIASES:
+        need_xcode_clt("info.xml requirement")
+    else:
+        need(tool, f"info.xml requirement")
 
 commands = parse_commands(root)
 install_dir.mkdir(parents=True, exist_ok=True)
@@ -758,6 +808,9 @@ doctor() {
   if have clang; then print -- "✓ clang found"; else print -- "! clang missing, C/Objective-C builds will fail"; fi
   if have clang++; then print -- "✓ clang++ found"; else print -- "! clang++ missing, C++ builds will fail"; fi
   if have swiftc; then print -- "✓ swiftc found"; else print -- "! swiftc missing, Swift builds will fail"; fi
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if xcode_clt_installed; then print -- "✓ Xcode Command Line Tools installed"; else print -- "! Xcode Command Line Tools missing, C/C++/Objective-C/Swift builds will fail (run: xcode-select --install)"; fi
+  fi
   if have go; then print -- "✓ go found"; else print -- "! go missing, Go builds will fail"; fi
   if have rustc; then print -- "✓ rustc found"; else print -- "! rustc missing, Rust builds will fail"; fi
   [ "$ok" -eq 1 ] || return 1
