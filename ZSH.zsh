@@ -18,6 +18,8 @@ Usage:
   tlib install-owner Bluegrayfoo RepoName
   tlib update RepoName
   tlib update Bluegrayfoo/RepoName
+  tlib updateScan
+  tlib updateScan --apply
   tlib uninstall RepoName
   tlib doctor
   tlib local /path/to/repo
@@ -799,6 +801,69 @@ update_spec() {
   record_manifest_commit "$key" "$latest"
 }
 
+# Check every installed module against GitHub and report which have new
+# commits. With --apply, update those that do.
+update_scan() {
+  local apply="${1:-}"
+  local manifest key installed latest sha_file parts owner repo branch
+  local -a outdated unknown failed
+  local checked=0 current=0
+
+  [ -d "$MANIFEST_DIR" ] || die "nothing is installed by tlib yet"
+  for manifest in "$MANIFEST_DIR"/*(N); do
+    key="$(grep '^module=' "$manifest" || true)"
+    key="${key#module=}"
+    [ -n "$key" ] || continue
+    [[ "$key" == local/* ]] && continue
+    parts="$(repo_parts_from_spec "$key")" || continue
+    owner="${parts[(w)1]}"
+    repo="${parts[(w)2]}"
+    branch="${parts[(w)3]}"
+    checked=$((checked + 1))
+
+    sha_file="${TMPDIR:-/tmp}/tlib-sha-$$-$RANDOM"
+    if ! run_step "Checking $key" "Checked $key" "Check failed for $key" resolve_commit_to_file "$owner" "$repo" "$branch" "$sha_file"; then
+      failed+=("$key")
+      continue
+    fi
+    latest="$(cat "$sha_file")"
+    rm -f "$sha_file"
+    installed="$(manifest_commit "$key")"
+
+    if [ -z "$installed" ]; then
+      note_step "$key: no version on record (installed before tlib tracked commits)"
+      unknown+=("$key")
+    elif [ "$installed" = "$latest" ]; then
+      note_step "$key: up to date at ${latest[1,7]}"
+      current=$((current + 1))
+    else
+      note_step "$key: update available ${installed[1,7]} → ${latest[1,7]}"
+      outdated+=("$key")
+    fi
+  done
+
+  [ "$checked" -gt 0 ] || die "nothing is installed by tlib yet"
+
+  if [ "$apply" = "--apply" ] && [ "${#outdated[@]}" -gt 0 ]; then
+    for key in "${outdated[@]}"; do
+      update_spec "$key"
+    done
+    return 0
+  fi
+
+  local summary="$checked checked, $current up to date"
+  if [ "${#outdated[@]}" -gt 0 ]; then
+    summary="$summary, ${#outdated[@]} with updates: ${(j:, :)outdated}. Run: tlib updateScan --apply"
+  fi
+  if [ "${#unknown[@]}" -gt 0 ]; then
+    summary="$summary. No version on record for ${(j:, :)unknown} — run tlib update on each to reinstall and start tracking"
+  fi
+  if [ "${#failed[@]}" -gt 0 ]; then
+    summary="$summary. Could not check: ${(j:, :)failed}"
+  fi
+  finish_progress "$summary."
+}
+
 uninstall_spec() {
   local spec="$1"
   local parts owner repo key manifest commands line command
@@ -856,6 +921,10 @@ main() {
     update)
       [ "$#" -eq 2 ] || die "usage: tlib update RepoName"
       update_spec "$2"
+      ;;
+    updateScan)
+      [ "$#" -eq 1 ] || [ "$2" = "--apply" ] || die "usage: tlib updateScan [--apply]"
+      update_scan "${2:-}"
       ;;
     uninstall)
       [ "$#" -eq 2 ] || die "usage: tlib uninstall RepoName"
