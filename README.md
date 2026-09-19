@@ -64,6 +64,8 @@ on macOS versions older than 13.)
 
 ```bash
 tlib install RepoName          # or Owner/RepoName, or a github.com URL
+tlib update RepoName           # reinstall only if the repo has new commits
+tlib updateScan                # check every installed repo for new commits
 tlib uninstall RepoName
 tlib doctor                    # check dependencies
 ```
@@ -115,6 +117,8 @@ tlib install Owner/RepoName
 tlib install https://github.com/Owner/RepoName
 tlib install https://raw.githubusercontent.com/Owner/RepoName/branch/
 tlib install-owner Owner RepoName    # same as install Owner/RepoName
+tlib update Owner/RepoName           # accepts the same specs as install
+tlib updateScan --apply              # check everything, then update what's behind
 tlib local /path/to/repo             # install from a local directory, no download
 tlib --version
 ```
@@ -127,6 +131,20 @@ if present (else falls back to a legacy `make.sh` + `src/*` shape), copies
 each resulting command into `$TLIB_INSTALL_DIR`, and writes a manifest to
 `$TLIB_CACHE_DIR/installed/<owner>__<repo>` listing what it installed.
 `tlib uninstall` just reads that manifest back and deletes those files.
+
+The manifest also records the commit that was installed (looked up from
+GitHub's API at install time). `tlib update <spec>` asks GitHub for the
+branch's current commit, says "Already up to date" if it matches, and
+otherwise downloads and installs again. A package installed before this
+existed has no commit on record, so its first `update` always reinstalls
+and records one.
+
+`tlib updateScan` runs that check for every manifest in
+`$TLIB_CACHE_DIR/installed` and prints one line per package: up to date,
+update available, or no version on record. Nothing is changed unless you
+pass `--apply`, which then runs `tlib update` on each package that has new
+commits (packages with no recorded commit are listed but left alone, so a
+scan never triggers a reinstall on its own).
 
 Only public GitHub repos are supported — downloads use GitHub's
 unauthenticated archive endpoint.

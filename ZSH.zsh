@@ -16,6 +16,10 @@ Usage:
   tlib install https://github.com/Bluegrayfoo/RepoName
   tlib install https://raw.githubusercontent.com/Bluegrayfoo/RepoName/main/
   tlib install-owner Bluegrayfoo RepoName
+  tlib update RepoName
+  tlib update Bluegrayfoo/RepoName
+  tlib updateScan
+  tlib updateScan --apply
   tlib uninstall RepoName
   tlib doctor
   tlib local /path/to/repo
@@ -138,6 +142,12 @@ run_step() {
 
   rm -f "$log"
   return "$result_status"
+}
+
+note_step() {
+  local message="$1"
+  printf '%s\n' "$(progress_pipe)"
+  printf '%s    %s   %s\n' "$(progress_diamond)" "$(progress_ok)" "$(progress_done "$message")"
 }
 
 finish_progress() {
@@ -352,6 +362,64 @@ write_manifest() {
     print -- "install_dir=$INSTALL_DIR"
     print -- "commands=$*"
   } > "$manifest"
+}
+
+manifest_commit() {
+  local key="$1"
+  local manifest="$(manifest_path_for_key "$key")"
+  [ -f "$manifest" ] || return 0
+  local line="$(grep '^commit=' "$manifest" || true)"
+  print -- "${line#commit=}"
+}
+
+record_manifest_commit() {
+  local key="$1"
+  local sha="$2"
+  local manifest="$(manifest_path_for_key "$key")"
+  [ -f "$manifest" ] && [ -n "$sha" ] || return 0
+  local tmp="$manifest.tmp"
+  grep -v '^commit=' "$manifest" > "$tmp" || true
+  print -- "commit=$sha" >> "$tmp"
+  mv "$tmp" "$manifest"
+}
+
+resolve_commit_to_file() {
+  local owner="$1"
+  local repo="$2"
+  local branch="$3"
+  local out="$4"
+  local url="https://api.github.com/repos/${owner}/${repo}/commits/${branch}"
+  local http_code sha
+
+  have curl || { print -u2 -- "curl is required to check GitHub"; return 1; }
+
+  http_code="$(curl -L -s -w '%{http_code}' -H 'Accept: application/vnd.github.sha' "$url" -o "$out")"
+  sha="$(cat "$out" 2>/dev/null)"
+  if [ "$http_code" != "200" ]; then
+    rm -f "$out"
+    case "$http_code" in
+      404)
+        print -u2 -- "GitHub repo or branch not found: $owner/$repo on branch '$branch'."
+        print -u2 -- "Check the spelling, make sure the repo is public, and make sure the branch is named '$branch'."
+        ;;
+      403|429)
+        print -u2 -- "GitHub's API rate limit was reached while checking $owner/$repo. Try again in a few minutes."
+        ;;
+      000)
+        print -u2 -- "Could not connect to GitHub. Check your internet connection."
+        ;;
+      *)
+        print -u2 -- "GitHub returned HTTP $http_code while checking $owner/$repo."
+        ;;
+    esac
+    print -u2 -- "URL: $url"
+    return 1
+  fi
+  if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+    rm -f "$out"
+    print -u2 -- "Unexpected reply from GitHub while checking $owner/$repo."
+    return 1
+  fi
 }
 
 install_info_xml() {
@@ -629,7 +697,6 @@ manifest_name = module_key.replace("/", "__")
 )
 print("Installed: " + ", ".join(installed_names))
 PY
-  finish_progress "Done. Installed successfully."
 }
 
 install_legacy_repo_dir() {
@@ -664,30 +731,137 @@ install_legacy_repo_dir() {
 
   [ "$installed" -gt 0 ] || die "no source files found in src/"
   write_manifest "$module_key" "${installed_names[@]}"
-  finish_progress "Done. Installed successfully."
 }
 
 install_repo_dir() {
   local repo_dir="$1"
   local module_key="${2:-local/${repo_dir:t}}"
+  local message="${3:-Done. Installed successfully.}"
   if [ -f "$repo_dir/info.xml" ]; then
-    install_info_xml "$repo_dir" "$module_key"
+    install_info_xml "$repo_dir" "$module_key" || return 1
   else
-    install_legacy_repo_dir "$repo_dir" "$module_key"
+    install_legacy_repo_dir "$repo_dir" "$module_key" || return 1
   fi
+  finish_progress "$message"
 }
 
 install_spec() {
   local spec="$1"
-  local parts owner repo branch repo_dir
+  local parts owner repo branch key repo_dir sha_file sha
   parts="$(repo_parts_from_spec "$spec")" || die "expected RepoName, Bluegrayfoo/RepoName, or a GitHub URL"
   owner="${parts[(w)1]}"
   repo="${parts[(w)2]}"
   branch="${parts[(w)3]}"
+  key="$(module_key_from_parts "$owner" "$repo")"
   repo_dir="$CACHE_DIR/repos/${owner}/${repo}/${branch}"
 
+  sha_file="${TMPDIR:-/tmp}/tlib-sha-$$-$RANDOM"
+  sha=""
+  if resolve_commit_to_file "$owner" "$repo" "$branch" "$sha_file" 2>/dev/null; then
+    sha="$(cat "$sha_file")"
+  fi
+  rm -f "$sha_file"
+
   run_step "Downloading $owner/$repo" "Downloaded $owner/$repo" "Download failed" download_repo "$owner" "$repo" "$branch" "$repo_dir" || exit 1
-  install_repo_dir "$repo_dir" "$(module_key_from_parts "$owner" "$repo")"
+  install_repo_dir "$repo_dir" "$key" || exit 1
+  record_manifest_commit "$key" "$sha"
+}
+
+update_spec() {
+  local spec="$1"
+  local parts owner repo branch key manifest repo_dir sha_file latest installed
+  parts="$(repo_parts_from_spec "$spec")" || die "expected RepoName, Bluegrayfoo/RepoName, or a GitHub URL"
+  owner="${parts[(w)1]}"
+  repo="${parts[(w)2]}"
+  branch="${parts[(w)3]}"
+  key="$(module_key_from_parts "$owner" "$repo")"
+  manifest="$(manifest_path_for_key "$key")"
+  [ -f "$manifest" ] || die "$key is not installed by tlib. Run: tlib install $key"
+  repo_dir="$CACHE_DIR/repos/${owner}/${repo}/${branch}"
+
+  sha_file="${TMPDIR:-/tmp}/tlib-sha-$$-$RANDOM"
+  run_step "Checking $key for updates" "Checked $key" "Update check failed" resolve_commit_to_file "$owner" "$repo" "$branch" "$sha_file" || exit 1
+  latest="$(cat "$sha_file")"
+  rm -f "$sha_file"
+  installed="$(manifest_commit "$key")"
+
+  if [ "$installed" = "$latest" ]; then
+    finish_progress "Already up to date. $key is at ${latest[1,7]}."
+    return 0
+  fi
+
+  if [ -n "$installed" ]; then
+    note_step "Update found: ${installed[1,7]} → ${latest[1,7]}"
+  else
+    note_step "No version on record, reinstalling at ${latest[1,7]}"
+  fi
+
+  run_step "Downloading $owner/$repo" "Downloaded $owner/$repo" "Download failed" download_repo "$owner" "$repo" "$branch" "$repo_dir" || exit 1
+  install_repo_dir "$repo_dir" "$key" "Done. Updated $key to ${latest[1,7]}." || exit 1
+  record_manifest_commit "$key" "$latest"
+}
+
+# Check every installed module against GitHub and report which have new
+# commits. With --apply, update those that do.
+update_scan() {
+  local apply="${1:-}"
+  local manifest key installed latest sha_file parts owner repo branch
+  local -a outdated unknown failed
+  local checked=0 current=0
+
+  [ -d "$MANIFEST_DIR" ] || die "nothing is installed by tlib yet"
+  for manifest in "$MANIFEST_DIR"/*(N); do
+    key="$(grep '^module=' "$manifest" || true)"
+    key="${key#module=}"
+    [ -n "$key" ] || continue
+    [[ "$key" == local/* ]] && continue
+    parts="$(repo_parts_from_spec "$key")" || continue
+    owner="${parts[(w)1]}"
+    repo="${parts[(w)2]}"
+    branch="${parts[(w)3]}"
+    checked=$((checked + 1))
+
+    sha_file="${TMPDIR:-/tmp}/tlib-sha-$$-$RANDOM"
+    if ! run_step "Checking $key" "Checked $key" "Check failed for $key" resolve_commit_to_file "$owner" "$repo" "$branch" "$sha_file"; then
+      failed+=("$key")
+      continue
+    fi
+    latest="$(cat "$sha_file")"
+    rm -f "$sha_file"
+    installed="$(manifest_commit "$key")"
+
+    if [ -z "$installed" ]; then
+      note_step "$key: no version on record (installed before tlib tracked commits)"
+      unknown+=("$key")
+    elif [ "$installed" = "$latest" ]; then
+      note_step "$key: up to date at ${latest[1,7]}"
+      current=$((current + 1))
+    else
+      note_step "$key: update available ${installed[1,7]} → ${latest[1,7]}"
+      outdated+=("$key")
+    fi
+  done
+
+  [ "$checked" -gt 0 ] || die "nothing is installed by tlib yet"
+
+  if [ "$apply" = "--apply" ] && [ "${#outdated[@]}" -gt 0 ]; then
+    for key in "${outdated[@]}"; do
+      update_spec "$key"
+    done
+    return 0
+  fi
+
+  local summary="$checked checked, $current up to date"
+  if [ "${#outdated[@]}" -gt 0 ]; then
+    summary="$summary, ${#outdated[@]} with updates: ${(j:, :)outdated}. Run: tlib updateScan --apply"
+  fi
+  if [ "${#unknown[@]}" -gt 0 ]; then
+    summary="$summary. No version on record for ${(j:, :)unknown} — run tlib update on each to reinstall and start tracking"
+  fi
+  if [ "${#failed[@]}" -gt 0 ]; then
+    summary="$summary. Could not check: ${(j:, :)failed}"
+  fi
+  finish_progress "$summary."
 }
 
 uninstall_spec() {
@@ -743,6 +917,14 @@ main() {
       [ "$#" -eq 2 ] || die "usage: tlib local /path/to/repo"
       run_step "Opening local module" "Opened local module" "Open failed" test -d "$2" || exit 1
       install_repo_dir "$2" "local/${2:t}"
+      ;;
+    update)
+      [ "$#" -eq 2 ] || die "usage: tlib update RepoName"
+      update_spec "$2"
+      ;;
+    updateScan)
+      [ "$#" -eq 1 ] || [ "$2" = "--apply" ] || die "usage: tlib updateScan [--apply]"
+      update_scan "${2:-}"
       ;;
     uninstall)
       [ "$#" -eq 2 ] || die "usage: tlib uninstall RepoName"
