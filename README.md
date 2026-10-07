@@ -4,6 +4,25 @@ A single zsh script that installs small GitHub-hosted "command" repos as
 executables on your `PATH`. Point it at a repo and it downloads, builds
 if needed, and drops the command(s) into `~/cmds`.
 
+## Disclaimer
+
+`tlib` downloads and installs software written by other people from GitHub
+repositories, then makes it runnable from your `PATH`. The `tlib` authors and
+contributors do not write, review, audit, host, or endorse the packages you
+install with it, and cannot guarantee that any of them is safe.
+
+**Installing a package means running someone else's code on your computer.**
+A package can contain malware, or code that is buggy, destructive, or
+harmful in other ways, such as deleting or stealing files or credentials.
+Only install packages from authors you trust, and read the repo first.
+
+`tlib` is provided "as is", without warranty of any kind, express or implied.
+To the fullest extent permitted by law, the `tlib` authors and contributors
+are not liable for any damage, data loss, security breach, or other harm
+caused by any package you install with `tlib`, including malware, or by
+`tlib` itself. You use `tlib` and everything installed with it at your own
+risk.
+
 ## Setup
 
 ```bash
