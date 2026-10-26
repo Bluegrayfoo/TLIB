@@ -7,10 +7,12 @@ if needed, and drops the command(s) into `~/cmds`.
 ## Setup
 
 ```bash
-if [ ! -d "$HOME/cmds" ]; then
-    mkdir -p "$HOME/cmds"
+mkdir -p "$HOME/cmds"
+# Put ~/cmds on PATH for new terminals (once), and for this one right now.
+if ! grep -qs 'HOME/cmds' "$HOME/.zshrc"; then
     printf '\nexport PATH="$HOME/cmds:$PATH"\n' >> "$HOME/.zshrc"
 fi
+case ":$PATH:" in *":$HOME/cmds:"*) ;; *) export PATH="$HOME/cmds:$PATH" ;; esac
 
 TLIB_SRC="$HOME/.tlib-src"
 if [ -d "$TLIB_SRC" ]; then
