@@ -11,7 +11,7 @@ If you already have ~/cmds/ on path:
 ```bash
 curl -fsSL 'https://raw.githubusercontent.com/Bluegrayfoo/TLIB/main/ZSH.zsh' > "$HOME/cmds/tlib" && chmod +x "$HOME/cmds/tlib"
 ```
-To add it to path: use this:
+To add it to path, use this:
 
 ```bash
 cd ~ && mkdir -p cmds && echo ‘export $PATH=“$HOME/cmds:$PATH"'
