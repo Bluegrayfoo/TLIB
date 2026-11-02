@@ -6,23 +6,15 @@ if needed, and drops the command(s) into `~/cmds`.
 
 ## Setup
 
+If you already have ~/cmds/ on path:
+
 ```bash
-if [ ! -d "$HOME/cmds" ]; then
-    mkdir -p "$HOME/cmds"
-    printf '\nexport PATH="$HOME/cmds:$PATH"\n' >> "$HOME/.zshrc"
-fi
+curl -fsSL 'https://raw.githubusercontent.com/Bluegrayfoo/TLIB/main/ZSH.zsh' > "$HOME/cmds/tlib" && chmod +x "$HOME/cmds/tlib"
+```
+To add it to path: use this:
 
-TLIB_SRC="$HOME/.tlib-src"
-if [ -d "$TLIB_SRC" ]; then
-    (cd "$TLIB_SRC" && git pull)
-else
-    git clone https://github.com/BlueGrayFoo/TLIB.git "$TLIB_SRC"
-fi
-cd "$TLIB_SRC" || exit 1
-
-chmod +x ZSH.zsh tlibUpdater
-ln -sf "$(pwd)/ZSH.zsh" "$HOME/cmds/tlib"
-ln -sf "$(pwd)/tlibUpdater" "$HOME/cmds/tlibUpdater"
+```bash
+cd ~ && mkdir -p cmds && echo ‘export $PATH=“$HOME/cmds:$PATH"'
 ```
 
 `tlib` and `tlibUpdater` both are installed with that command. (`zsh`,
