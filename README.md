@@ -33,6 +33,24 @@ curl -fsSL 'https://raw.githubusercontent.com/Bluegrayfoo/TLIB/main/ZSH.zsh' > "
 To add it to path, use this:
 
 ```bash
+mkdir -p "$HOME/cmds"
+# Put ~/cmds on PATH for new terminals (once), and for this one right now.
+if ! grep -qs 'HOME/cmds' "$HOME/.zshrc"; then
+    printf '\nexport PATH="$HOME/cmds:$PATH"\n' >> "$HOME/.zshrc"
+fi
+case ":$PATH:" in *":$HOME/cmds:"*) ;; *) export PATH="$HOME/cmds:$PATH" ;; esac
+
+TLIB_SRC="$HOME/.tlib-src"
+if [ -d "$TLIB_SRC" ]; then
+    (cd "$TLIB_SRC" && git pull)
+else
+    git clone https://github.com/BlueGrayFoo/TLIB.git "$TLIB_SRC"
+fi
+cd "$TLIB_SRC" || exit 1
+
+chmod +x ZSH.zsh tlibUpdater
+ln -sf "$(pwd)/ZSH.zsh" "$HOME/cmds/tlib"
+ln -sf "$(pwd)/tlibUpdater" "$HOME/cmds/tlibUpdater"
 cd ~ && mkdir -p cmds && echo ‘export $PATH=“$HOME/cmds:$PATH"'
 ```
 

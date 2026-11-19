@@ -165,6 +165,14 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+on_path() {
+  case ":$PATH:" in *":$1:"*) return 0 ;; *) return 1 ;; esac
+}
+
+path_fix_command() {
+  print -r -- "echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.zprofile && source ~/.zprofile"
+}
+
 xcode_clt_installed() {
   have xcode-select && xcode-select -p >/dev/null 2>&1
 }
@@ -827,6 +835,10 @@ install_repo_dir() {
     install_legacy_repo_dir "$repo_dir" "$module_key" || return 1
   fi
   finish_progress "$message"
+  if ! on_path "$INSTALL_DIR"; then
+    print -u2 -- "tlib: note: $INSTALL_DIR is not on your PATH, so the new command will say \"command not found\"."
+    print -u2 -- "tlib: fix it with: $(path_fix_command)"
+  fi
 }
 
 install_spec() {
@@ -976,6 +988,7 @@ doctor() {
   print -- "cache dir: $CACHE_DIR"
   print -- "platform: $(uname -s)"
   if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then print -- "✓ ~/cmds is writable"; else print -- "✗ ~/cmds is not writable or does not exist"; ok=0; fi
+  if on_path "$INSTALL_DIR"; then print -- "✓ $INSTALL_DIR is on your PATH"; else print -- "✗ $INSTALL_DIR is not on your PATH, so installed commands will say \"command not found\" (run: $(path_fix_command))"; ok=0; fi
   for tool in curl tar zsh python3; do
     if have "$tool"; then print -- "✓ $tool found"; else print -- "✗ $tool missing"; ok=0; fi
   done
