@@ -2,8 +2,7 @@
 
 This is the full checklist and reference for getting a GitHub repo to
 install cleanly with `tlib install`. Everything here is derived directly
-from `ZSH.zsh` — if your repo satisfies these rules, `tlib install` will
-work; if it doesn't, this doc tells you exactly which check fails and why.
+from `ZSH.zsh`.
 
 Every example in this document is a **real, currently-published repo**
 you can install and inspect yourself right now — `knittingCat/stock-checker`,
@@ -92,8 +91,7 @@ for real, against `knittingCat/stock-checker`).
       **Fix:** make the repo public in its GitHub settings, or double-check
       the spelling of the owner/repo name.
 
-- [ ] **The branch you're installing from is actually named what you
-      think.** The bare form always assumes `main`:
+- [ ] The bare form always assumes `main`:
       ```bash
       tlib install knittingCat/stock-checker
       # → tries https://github.com/knittingCat/stock-checker/archive/refs/heads/main.tar.gz
@@ -175,10 +173,6 @@ version — same file, `<package>` removed — installs identically:
   </commands>
 </tlib>
 ```
-
-(Still, use the `<package>`-wrapped form in your own repos — it's the
-convention every real repo here follows, and it's what a reader expects.)
-
 There's currently no version-compatibility mechanism at all: changing
 `version="1.0.0"` to `version="99.0.0"` in the file above changes nothing
 about how it installs — `tlib` doesn't read it. Likewise, a real line
@@ -237,11 +231,6 @@ no OS restriction — the package is assumed to run anywhere.
   ```
   tlib info.xml: node is required for info.xml requirement
   ```
-- **Compliance tip:** only list tools your commands' `build=` steps or
-  runtime actually need — this is why `stock-checker`'s `<requires>` lists
-  only `python3` and not, say, `node`, even though other repos in this
-  same GitHub account need it. Every install of your repo pays the cost
-  of every tool you list.
 - **Xcode Command Line Tools** are a special case, because a plain
   `command -v clang` isn't reliable proof they're installed — a fresh
   macOS install can have a placeholder `clang` on `PATH` that only starts
@@ -343,7 +332,6 @@ a hand-written wrapper script, used as-is:
   # .gitignore
   bin/          ← if this line exists, bin/stock-checker never reaches GitHub
   ```
-  Double check with a fresh clone, not just your working copy.
 
 **`build` (with or without `output`)** — runs a shell command in the repo
 root first, then locates the result. `SD-Photo-Viewer`'s real command:
@@ -373,9 +361,6 @@ If the build command itself fails (non-zero exit), install aborts:
 ```
 command failed with exit 127: npm install
 ```
-(exit 127 here would mean `npm` itself wasn't found — see the trust note
-in section 6 about not assuming your dev machine's tools are present.)
-
 **`source`** — a source file `tlib` builds or wraps for you, dispatched by
 `language=` (or by the file's extension if `language` is omitted).
 `SD-Photo-Viewer`'s second command uses this — real, complete:
@@ -608,9 +593,6 @@ nested in a subdirectory:**
   </package>
 </tlib>
 ```
-
-(The `<platforms>` block is the enforced one from section 2 — it's here
-because this is the real file, unedited.)
 
 **`knittingCat/stock-checker`'s `info.xml` — four commands, all
 `output=`-only, needing only `python3`:**
